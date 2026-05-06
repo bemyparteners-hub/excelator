@@ -33,6 +33,22 @@ body {
   color: white;
 }
 
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+  border: 1px solid #e6e9ef;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   font-size: 12px;

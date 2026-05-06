@@ -21,6 +21,14 @@ Cet outil ne cherche pas à recréer Excel. Il sert à remplacer un travail rép
 - `calculations.js` : formules de calcul métier.
 - `export.js` : export CSV, sauvegarde locale et rendu du devis client.
 - `README.md` : documentation.
+- `assets/images/` : logos et visuels personnalisés (ex. `logo.png`).
+
+
+## Ajouter ton logo
+
+1. Place ton logo dans `assets/images/` avec le nom `logo.png`.
+2. Recharge la page dans le navigateur.
+3. Le logo s’affiche automatiquement dans l’en-tête.
 
 ## Lancer l'application
 
