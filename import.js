@@ -199,7 +199,7 @@ function guessColumnMapping(columns) {
   return mapping;
 }
 
-function applyMappingToRows(sourceRows, mapping, settings) {
+function applyMappingToRows(sourceRows, mapping, params) {
   return sourceRows.map(sourceRow => {
     const row = makeEmptyRow();
 
@@ -210,28 +210,15 @@ function applyMappingToRows(sourceRows, mapping, settings) {
     });
 
     row.quantity = parseNumber(row.quantity, 1) || 1;
-    row.material = normalizeMaterial(row.material || inferMaterialFromText(`${row.designation} ${row.finish}`));
-    row.thickness = parseThickness(row.thickness || row.designation || row.material) || row.thickness || 1.5;
+    row.material = String(row.material || '').trim();
+    row.thickness = parseThickness(row.thickness || row.designation || row.material) || parseNumber(row.thickness, 0);
     row.surfaceUnit = parseNumber(row.surfaceUnit, 0);
-    row.weightUnit = parseNumber(row.weightUnit, 0);
     row.length = parseNumber(row.length, 0);
     row.developed = parseNumber(row.developed, 0);
-    row.marginCoeff = settings.defaultMarginCoeff;
+    row.bends = Math.max(parseNumber(row.bends, 0), 0);
 
-    const finishText = String(`${row.finish} ${row.designation}`).toLowerCase();
-    row.postLacquer = /post|laquage|thermolaqu/i.test(finishText);
-    row.preLacquer = /pre|pré|prelaqu/i.test(finishText);
-
-    return calculateRow(row, settings);
+    return calculateRow(row, params);
   });
-}
-
-function inferMaterialFromText(text) {
-  const lower = String(text || '').toLowerCase();
-  if (lower.includes('inox')) return 'Inox';
-  if (lower.includes('alu') || lower.includes('aluminium')) return 'Aluminium';
-  if (lower.includes('acier') || lower.includes('steel') || lower.includes('galva')) return 'Acier';
-  return 'Acier';
 }
 
 function parseThickness(value) {

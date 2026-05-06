@@ -18,7 +18,9 @@ Cet outil ne cherche pas à recréer Excel. Il sert à remplacer un travail rép
 - `style.css` : mise en page, tableau et devis imprimable.
 - `app.js` : logique principale de l'interface.
 - `import.js` : import CSV/XLSX/XLSB via SheetJS et mapping des colonnes.
-- `calculations.js` : formules de calcul métier.
+- `chiffrage.js` : formules de chiffrage pures et persistance des paramètres.
+- `chiffrage.test.js` : tests unitaires Node sur les formules.
+- `calculations.js` : schéma des champs ligne et orchestration des calculs.
 - `export.js` : export CSV, sauvegarde locale et rendu du devis client.
 - `README.md` : documentation.
 - `assets/images/` : logos et visuels personnalisés (ex. `logo.png`).
@@ -69,76 +71,93 @@ Le mapping peut alimenter :
 - Référence pièce
 - Désignation
 - Quantité
-- Matière
+- Matière (code, ex. `AC15`)
 - Épaisseur
 - Finition
 - RAL / couleur
 - Longueur
 - Développé
-- Surface unitaire
-- Poids unitaire
+- Nombre de plis
+- Surface unitaire (sinon recalculée à partir de longueur × développé)
 - Commentaire client
 
-Après mapping, le tableau de chiffrage ajoute les colonnes métier :
+Après mapping, le tableau de chiffrage affiche en plus :
 
-- Nombre de plis
-- Poinçonnage
-- Soudure
-- Post-laquage
-- Pré-laquage
-- Coût matière
-- Coût laquage
-- Coût main-d'œuvre
-- Coefficient marge
-- Prix unitaire HT
-- Total HT
+- Temps / pli (s) — saisie manuelle si non importée
+- Surface unitaire et totale (calculées)
+- MAT, MO, PL, PR, PV unit, PV total (calculés)
+- Soudure € (saisie manuelle, défaut 0)
 - Commentaire interne
 
-## Modifier les paramètres de prix
+## Modifier les paramètres de chiffrage
 
-Va dans l'onglet **Paramètres**.
+Va dans l'onglet **Paramètres**. Deux sections :
 
-Tu peux modifier :
+### 1. Matières (prix au m²)
 
-- Prix acier au kg
-- Prix aluminium au kg
-- Prix inox au kg
-- Prix post-laquage au m²
-- Prix pré-laquage au m²
-- Coût par pli
-- Coût poinçonnage
-- Coût soudure
-- Forfait main-d'œuvre
-- Coefficient marge par défaut
-- TVA
-- Densités matière
+Table éditable. Chaque ligne associe un **code matière** (ex. `GA20/10`,
+`AC15`, `AC10`) à un **prix €/m²**. Tu peux ajouter, modifier ou supprimer
+des lignes. Le code matière sert de clé de jointure avec la colonne
+`Matière` du fichier importé.
 
-Les lignes sont recalculées automatiquement.
+Si une ligne du chiffrage référence un code absent de cette table, elle est
+**surlignée en rouge** et un avertissement s’affiche au-dessus du tableau ;
+le coût matière est alors calculé à 0 € tant que la matière n’est pas
+ajoutée.
 
-## Modifier les formules de calcul
+### 2. Coefficients globaux
 
-Les formules sont dans le fichier :
+| Variable | Défaut | Rôle |
+|---|---|---|
+| Taux de chute (`coeffChute`) | 0,9 | Diviseur appliqué au coût matière |
+| Coeff transport (`coeffTransport`) | 0,88 | Diviseur appliqué pour passer du coût total au prix de revient |
+| Marge finale (`coeffMarge`) | 0,7 | Diviseur appliqué pour passer du PR au PV unitaire |
+| Prix MO €/sec (`prixMoSec`) | 0,017 | Coût main-d'œuvre à la seconde |
+| Prix pliage €/m² (`prixPliageM2`) | 15,00 | Coût pliage par m² de surface unitaire |
 
-```text
-calculations.js
+Les paramètres sont persistés dans `localStorage` sous la clé
+`devis-params-v1`.
+
+## Formules de chiffrage
+
+Les formules vivent dans `chiffrage.js` (fonction pure
+`computeChiffrage(row, params)`). Elles sont couvertes par les tests
+unitaires `chiffrage.test.js`.
+
+```
+Surface_unit  = (Longueur × Développé) / 1 000 000        // mm² → m²
+Surface_tot   = Surface_unit × Quantité
+
+MAT           = Surface_unit × Prix_matière / coeffChute
+PL            = Surface_unit × prixPliageM2
+MO            = nb_plis × temps_par_pli_sec × prixMoSec   // 0 si données absentes
+SOUDURE       = saisie manuelle (€, défaut 0)
+
+PR            = (MAT + MO + SOUDURE + PL) / coeffTransport
+PV_unit       = PR / coeffMarge
+PV_tot        = PV_unit × Quantité
 ```
 
-Fonction principale :
+### Vérification (Excel de référence)
 
-```js
-calculateRow(inputRow, settings)
+Ligne AC15, longueur 1581 mm, développé 245 mm, 4 plis × 55 s :
+
+| Champ | Valeur |
+|---|---|
+| Surface unit. | 0,387345 m² |
+| MAT | 5,810 € |
+| PL | 5,810 € |
+| MO | 3,740 € |
+| PR | 17,455 € |
+| PV unit. | 24,94 € |
+
+Cette vérification est codée dans `chiffrage.test.js`.
+
+### Lancer les tests
+
+```bash
+node chiffrage.test.js
 ```
-
-Formules actuelles :
-
-- Surface unitaire = Longueur x Développé / 1 000 000
-- Surface totale = Surface unitaire x Quantité
-- Poids estimé = Surface unitaire x épaisseur x densité
-- Coût matière = Poids total x prix matière au kg
-- Coût laquage = Surface totale x prix laquage au m²
-- Coût main-d'œuvre = forfait + plis + options
-- Prix total HT = coût total x coefficient marge
-- Prix unitaire HT = total HT / quantité
 
 ## Générer le devis client
 
