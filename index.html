@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Générateur de devis - Pliage / Profilage</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="app-header no-print">
+    <div>
+      <p class="eyebrow">Outil métier</p>
+      <h1>Générateur de devis pliage / profilage</h1>
+      <p class="subtitle">Import client → mapping → chiffrage interne → devis client imprimable.</p>
+    </div>
+    <div class="header-actions">
+      <button id="loadDemoBtn" class="btn secondary">Charger exemple</button>
+      <button id="saveLocalBtn" class="btn secondary">Sauvegarder localement</button>
+      <button id="loadLocalBtn" class="btn secondary">Recharger</button>
+      <button id="printBtn" class="btn primary">Imprimer / PDF</button>
+    </div>
+  </header>
+
+  <nav class="tabs no-print" aria-label="Navigation principale">
+    <button class="tab active" data-tab="import">1. Import</button>
+    <button class="tab" data-tab="chiffrage">2. Chiffrage</button>
+    <button class="tab" data-tab="devis">3. Devis client</button>
+    <button class="tab" data-tab="parametres">Paramètres</button>
+  </nav>
+
+  <main>
+    <section id="tab-import" class="panel active no-print">
+      <div class="grid two-cols">
+        <section class="card">
+          <h2>Importer un fichier client</h2>
+          <p>Formats conseillés : <strong>CSV</strong> ou <strong>XLSX</strong>. Les fichiers XLSB sont plus complexes : exporte-les en CSV/XLSX si possible.</p>
+          <div class="dropzone" id="dropzone">
+            <input id="fileInput" type="file" accept=".csv,.xlsx,.xls,.xlsb" />
+            <p><strong>Glisse un fichier ici</strong> ou clique pour choisir un fichier.</p>
+            <small>Les données restent dans ton navigateur.</small>
+          </div>
+          <div id="importStatus" class="notice muted">Aucun fichier importé.</div>
+        </section>
+
+        <section class="card">
+          <h2>Informations devis</h2>
+          <div class="form-grid">
+            <label>Numéro de devis<input id="quoteNumber" type="text" placeholder="DEV-2026-001" /></label>
+            <label>Date<input id="quoteDate" type="date" /></label>
+            <label>Client<input id="clientName" type="text" placeholder="Nom client" /></label>
+            <label>Projet / chantier<input id="projectName" type="text" placeholder="Nom du chantier" /></label>
+            <label>Commercial<input id="salesName" type="text" placeholder="Votre nom" /></label>
+            <label>Validité<input id="validity" type="text" placeholder="30 jours" /></label>
+          </div>
+        </section>
+      </div>
+
+      <section class="card" id="mappingCard" hidden>
+        <div class="section-title-row">
+          <div>
+            <h2>Mapping des colonnes</h2>
+            <p>Associe les colonnes du fichier client à tes champs internes. L’outil propose une détection automatique, mais tu peux corriger.</p>
+          </div>
+          <button id="applyMappingBtn" class="btn primary">Appliquer le mapping</button>
+        </div>
+        <div id="mappingGrid" class="mapping-grid"></div>
+      </section>
+
+      <section class="card" id="previewCard" hidden>
+        <div class="section-title-row">
+          <div>
+            <h2>Aperçu import</h2>
+            <p id="previewInfo"></p>
+          </div>
+        </div>
+        <div class="table-wrap"><table id="previewTable"></table></div>
+      </section>
+    </section>
+
+    <section id="tab-chiffrage" class="panel no-print">
+      <section class="card">
+        <div class="section-title-row">
+          <div>
+            <h2>Tableau de chiffrage interne</h2>
+            <p>Les colonnes de coût et de marge restent internes. Elles ne seront pas visibles dans le devis client.</p>
+          </div>
+          <div class="button-row">
+            <button id="addRowBtn" class="btn secondary">+ Ajouter ligne</button>
+            <button id="recalculateBtn" class="btn secondary">Recalculer</button>
+            <button id="exportCsvBtn" class="btn secondary">Exporter CSV</button>
+          </div>
+        </div>
+        <div class="totals-strip" id="internalTotals"></div>
+        <div class="table-wrap large"><table id="quoteTable" class="data-table"></table></div>
+      </section>
+    </section>
+
+    <section id="tab-devis" class="panel">
+      <section class="card no-print">
+        <div class="section-title-row">
+          <div>
+            <h2>Vue client</h2>
+            <p>Cette vue masque tes coûts, coefficients et commentaires internes.</p>
+          </div>
+          <button id="refreshQuoteBtn" class="btn secondary">Actualiser la vue</button>
+        </div>
+      </section>
+      <section id="quoteDocument" class="quote-document"></section>
+    </section>
+
+    <section id="tab-parametres" class="panel no-print">
+      <section class="card">
+        <div class="section-title-row">
+          <div>
+            <h2>Paramètres de prix</h2>
+            <p>Modifie ici tes prix matière, forfaits et coefficients. Les calculs se mettent à jour automatiquement.</p>
+          </div>
+          <button id="resetSettingsBtn" class="btn secondary">Réinitialiser</button>
+        </div>
+        <div id="settingsGrid" class="settings-grid"></div>
+      </section>
+      <section class="card">
+        <h2>Conditions client</h2>
+        <textarea id="quoteConditions" rows="5" placeholder="Ex. Prix HT, hors pose, hors transport, validité 30 jours, sous réserve de validation des plans..."></textarea>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast no-print" hidden></div>
+
+  <script src="calculations.js"></script>
+  <script src="import.js"></script>
+  <script src="export.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
