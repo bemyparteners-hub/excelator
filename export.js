@@ -41,7 +41,7 @@ function downloadTextFile(content, fileName, mimeType) {
 }
 
 function renderQuoteDocument(state) {
-  const totals = calculateTotals(state.rows, state.settings);
+  const totals = calculateTotals(state.rows, state.params, state.settings);
   const quote = state.quoteInfo;
   const rowsHtml = totals.rows.map(row => {
     const finish = [row.material, row.finish, row.ral].filter(Boolean).join(' - ');
@@ -51,8 +51,8 @@ function renderQuoteDocument(state) {
         <td>${escapeHtml(row.designation)}</td>
         <td class="num">${formatNumber(row.quantity, 0)}</td>
         <td>${escapeHtml(finish)}</td>
-        <td class="num">${formatMoney(row.unitPrice)}</td>
-        <td class="num">${formatMoney(row.totalHT)}</td>
+        <td class="num">${formatMoney(row.pvUnit)}</td>
+        <td class="num">${formatMoney(row.pvTot)}</td>
       </tr>`;
   }).join('');
 

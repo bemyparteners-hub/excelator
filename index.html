@@ -100,6 +100,7 @@
           </div>
         </div>
         <div class="totals-strip" id="internalTotals"></div>
+        <div id="unknownMaterialsWarning" class="notice warning" hidden></div>
         <div class="table-wrap large"><table id="quoteTable" class="data-table"></table></div>
       </section>
     </section>
@@ -121,12 +122,25 @@
       <section class="card">
         <div class="section-title-row">
           <div>
-            <h2>Paramètres de prix</h2>
-            <p>Modifie ici tes prix matière, forfaits et coefficients. Les calculs se mettent à jour automatiquement.</p>
+            <h2>Paramètres de chiffrage</h2>
+            <p>Configure les prix matière et les coefficients utilisés par les formules de chiffrage. Les calculs se mettent à jour automatiquement.</p>
           </div>
           <button id="resetSettingsBtn" class="btn secondary">Réinitialiser</button>
         </div>
-        <div id="settingsGrid" class="settings-grid"></div>
+
+        <div class="settings-section">
+          <div class="section-title-row">
+            <h3>Matières (prix au m²)</h3>
+            <button id="addMaterialBtn" class="btn secondary">+ Ajouter une matière</button>
+          </div>
+          <p class="muted-text">Le code matière sert de clé avec la colonne <em>Matière</em> de l’import. Si une ligne importée référence un code absent, elle est surlignée en rouge dans le chiffrage.</p>
+          <div class="table-wrap"><table id="materialsTable" class="materials-table"></table></div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Coefficients globaux</h3>
+          <div id="coefficientsGrid" class="settings-grid"></div>
+        </div>
       </section>
       <section class="card">
         <h2>Conditions client</h2>
@@ -137,6 +151,7 @@
 
   <div id="toast" class="toast no-print" hidden></div>
 
+  <script src="chiffrage.js"></script>
   <script src="calculations.js"></script>
   <script src="import.js"></script>
   <script src="export.js"></script>

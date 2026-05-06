@@ -3,6 +3,7 @@
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
+  params: cloneDefaultParams(),
   quoteInfo: {
     quoteNumber: generateQuoteNumber(),
     quoteDate: new Date().toISOString().slice(0, 10),
@@ -34,8 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
   bindEvents();
   initQuoteInfo();
-  renderSettings();
-  state.rows = calculateRows(createDemoRows(), state.settings);
+  state.params = loadDevisParams();
+  renderParametres();
+  state.rows = calculateRows(createDemoRows(), state.params);
   renderAll();
   showToast('Exemple chargé. Tu peux importer un fichier client ou modifier les lignes.');
 });
@@ -54,10 +56,13 @@ function cacheElements() {
   elements.applyMappingBtn = document.getElementById('applyMappingBtn');
   elements.quoteTable = document.getElementById('quoteTable');
   elements.internalTotals = document.getElementById('internalTotals');
+  elements.unknownMaterialsWarning = document.getElementById('unknownMaterialsWarning');
   elements.addRowBtn = document.getElementById('addRowBtn');
   elements.recalculateBtn = document.getElementById('recalculateBtn');
   elements.exportCsvBtn = document.getElementById('exportCsvBtn');
-  elements.settingsGrid = document.getElementById('settingsGrid');
+  elements.materialsTable = document.getElementById('materialsTable');
+  elements.addMaterialBtn = document.getElementById('addMaterialBtn');
+  elements.coefficientsGrid = document.getElementById('coefficientsGrid');
   elements.resetSettingsBtn = document.getElementById('resetSettingsBtn');
   elements.quoteDocument = document.getElementById('quoteDocument');
   elements.refreshQuoteBtn = document.getElementById('refreshQuoteBtn');
@@ -107,8 +112,9 @@ function bindEvents() {
     recalculateRows();
     showToast('Chiffrage recalculé.');
   });
-  elements.exportCsvBtn.addEventListener('click', () => exportRowsToCsv(calculateRows(state.rows, state.settings)));
+  elements.exportCsvBtn.addEventListener('click', () => exportRowsToCsv(calculateRows(state.rows, state.params)));
   elements.resetSettingsBtn.addEventListener('click', resetSettings);
+  elements.addMaterialBtn.addEventListener('click', addMaterial);
   elements.refreshQuoteBtn.addEventListener('click', renderQuote);
   elements.printBtn.addEventListener('click', () => {
     renderQuote();
@@ -116,7 +122,7 @@ function bindEvents() {
     window.print();
   });
   elements.loadDemoBtn.addEventListener('click', () => {
-    state.rows = calculateRows(createDemoRows(), state.settings);
+    state.rows = calculateRows(createDemoRows(), state.params);
     renderAll();
     switchTab('chiffrage');
     showToast('Exemple rechargé.');
@@ -124,6 +130,7 @@ function bindEvents() {
   elements.saveLocalBtn.addEventListener('click', () => {
     syncQuoteInfoFromInputs();
     saveStateToLocalStorage(state);
+    saveDevisParams(state.params);
     showToast('Projet sauvegardé dans ce navigateur.');
   });
   elements.loadLocalBtn.addEventListener('click', loadLocalProject);
@@ -249,7 +256,7 @@ function applyCurrentMapping() {
     return;
   }
 
-  state.rows = applyMappingToRows(state.imported.rows, state.mapping, state.settings);
+  state.rows = applyMappingToRows(state.imported.rows, state.mapping, state.params);
   renderAll();
   switchTab('chiffrage');
   showToast(`${state.rows.length} lignes importées dans le chiffrage.`);
@@ -263,7 +270,7 @@ function renderAll() {
 }
 
 function recalculateRows() {
-  state.rows = calculateRows(state.rows, state.settings);
+  state.rows = calculateRows(state.rows, state.params);
   renderQuoteTable();
   renderInternalTotals();
   renderQuote();
@@ -299,6 +306,25 @@ function renderQuoteTable() {
   elements.quoteTable.querySelectorAll('[data-action="delete"]').forEach(button => {
     button.addEventListener('click', () => deleteRow(Number(button.dataset.rowIndex)));
   });
+
+  renderUnknownMaterialsWarning();
+}
+
+function renderUnknownMaterialsWarning() {
+  if (!elements.unknownMaterialsWarning) return;
+  const unknown = Array.from(new Set(
+    state.rows
+      .filter(r => r.material && r.materialKnown === false)
+      .map(r => r.material)
+  ));
+  if (!unknown.length) {
+    elements.unknownMaterialsWarning.hidden = true;
+    elements.unknownMaterialsWarning.textContent = '';
+    return;
+  }
+  elements.unknownMaterialsWarning.hidden = false;
+  elements.unknownMaterialsWarning.textContent =
+    `Matières absentes du tableau Paramètres : ${unknown.join(', ')}. MAT calculé à 0 € — ajoute ces codes dans Paramètres ➜ Matières.`;
 }
 
 function getDisplayedRows() {
@@ -335,8 +361,9 @@ function setSort(key) {
 
 function renderQuoteRow(row, rowIndex) {
   const cells = FIELD_DEFINITIONS.map(field => `<td>${renderCell(field, row, rowIndex)}</td>`).join('');
+  const warningClass = row.material && row.materialKnown === false ? ' class="row-warning"' : '';
   return `
-    <tr>
+    <tr${warningClass}>
       ${cells}
       <td class="actions-cell">
         <button class="small-btn" data-action="duplicate" data-row-index="${rowIndex}">Dupliquer</button>
@@ -366,7 +393,7 @@ function renderCell(field, row, rowIndex) {
       <option value="true" ${value ? 'selected' : ''}>Oui</option>
     </select>`;
   }
-  if (field.type === 'number') {
+  if (field.type === 'number' || field.type === 'money') {
     return `<input type="number" step="0.01" value="${escapeHtml(value)}" data-row-index="${rowIndex}" data-field="${field.key}" />`;
   }
   return `<input type="text" value="${escapeHtml(value)}" data-row-index="${rowIndex}" data-field="${field.key}" />`;
@@ -378,11 +405,11 @@ function handleCellInput(event) {
   const definition = FIELD_DEFINITIONS.find(field => field.key === fieldKey);
   let value = event.target.value;
 
-  if (definition.type === 'number') value = parseNumber(value, 0);
+  if (definition.type === 'number' || definition.type === 'money') value = parseNumber(value, 0);
   if (definition.type === 'boolean') value = value === 'true';
 
   state.rows[rowIndex][fieldKey] = value;
-  state.rows[rowIndex] = calculateRow(state.rows[rowIndex], state.settings);
+  state.rows[rowIndex] = calculateRow(state.rows[rowIndex], state.params);
 
   renderQuoteTable();
   renderInternalTotals();
@@ -390,7 +417,7 @@ function handleCellInput(event) {
 }
 
 function addRow() {
-  state.rows.push(calculateRow(makeEmptyRow(), state.settings));
+  state.rows.push(calculateRow(makeEmptyRow(), state.params));
   renderAll();
 }
 
@@ -406,52 +433,99 @@ function deleteRow(index) {
 }
 
 function renderInternalTotals() {
-  const totals = calculateTotals(state.rows, state.settings);
+  const totals = calculateTotals(state.rows, state.params, state.settings);
   elements.internalTotals.innerHTML = `
-    <div class="total-box"><span>Total HT client</span><strong>${formatMoney(totals.totalHT)}</strong></div>
-    <div class="total-box"><span>Coût matière</span><strong>${formatMoney(totals.materialCost)}</strong></div>
-    <div class="total-box"><span>Coût laquage</span><strong>${formatMoney(totals.lacquerCost)}</strong></div>
-    <div class="total-box"><span>Coût main-d’œuvre</span><strong>${formatMoney(totals.laborCost)}</strong></div>
+    <div class="total-box"><span>PV total HT</span><strong>${formatMoney(totals.totalHT)}</strong></div>
+    <div class="total-box"><span>Coût matière (MAT)</span><strong>${formatMoney(totals.matTotal)}</strong></div>
+    <div class="total-box"><span>Pliage (PL)</span><strong>${formatMoney(totals.plTotal)}</strong></div>
+    <div class="total-box"><span>Main-d’œuvre (MO)</span><strong>${formatMoney(totals.moTotal)}</strong></div>
   `;
 }
 
-function renderSettings() {
-  const settingLabels = {
-    steelPriceKg: 'Prix acier €/kg',
-    aluminiumPriceKg: 'Prix aluminium €/kg',
-    inoxPriceKg: 'Prix inox €/kg',
-    defaultLaquagePriceM2: 'Post-laquage €/m²',
-    preLaquagePriceM2: 'Pré-laquage €/m²',
-    costPerBend: 'Coût par pli €',
-    punchingCost: 'Coût poinçonnage €',
-    weldingCost: 'Coût soudure €',
-    baseLaborCost: 'Forfait MO / pièce €',
-    defaultMarginCoeff: 'Coefficient marge défaut',
-    tvaRate: 'TVA %',
-    steelDensity: 'Densité acier kg/m³',
-    aluminiumDensity: 'Densité alu kg/m³',
-    inoxDensity: 'Densité inox kg/m³'
-  };
+function renderParametres() {
+  renderMaterialsTable();
+  renderCoefficients();
+}
 
-  elements.settingsGrid.innerHTML = Object.entries(settingLabels).map(([key, label]) => `
+function renderMaterialsTable() {
+  const rows = state.params.materials.map((mat, index) => `
+    <tr>
+      <td><input type="text" value="${escapeHtml(mat.code)}" data-mat-index="${index}" data-mat-field="code" /></td>
+      <td><input type="number" step="0.01" value="${escapeHtml(mat.priceM2)}" data-mat-index="${index}" data-mat-field="priceM2" /></td>
+      <td><button class="small-btn danger" data-action="delete-material" data-mat-index="${index}">Supprimer</button></td>
+    </tr>
+  `).join('');
+
+  elements.materialsTable.innerHTML = `
+    <thead>
+      <tr><th>Code matière</th><th>Prix €/m²</th><th></th></tr>
+    </thead>
+    <tbody>
+      ${rows || '<tr><td colspan="3" class="muted-cell">Aucune matière configurée.</td></tr>'}
+    </tbody>
+  `;
+
+  elements.materialsTable.querySelectorAll('input[data-mat-index]').forEach(input => {
+    input.addEventListener('input', handleMaterialInput);
+  });
+  elements.materialsTable.querySelectorAll('[data-action="delete-material"]').forEach(button => {
+    button.addEventListener('click', () => deleteMaterial(Number(button.dataset.matIndex)));
+  });
+}
+
+function handleMaterialInput(event) {
+  const index = Number(event.target.dataset.matIndex);
+  const field = event.target.dataset.matField;
+  const value = field === 'priceM2' ? parseNumber(event.target.value, 0) : event.target.value;
+  state.params.materials[index][field] = value;
+  saveDevisParams(state.params);
+  recalculateRows();
+}
+
+function addMaterial() {
+  state.params.materials.push({ code: 'NOUVEAU', priceM2: 0 });
+  saveDevisParams(state.params);
+  renderMaterialsTable();
+  recalculateRows();
+}
+
+function deleteMaterial(index) {
+  state.params.materials.splice(index, 1);
+  saveDevisParams(state.params);
+  renderMaterialsTable();
+  recalculateRows();
+}
+
+function renderCoefficients() {
+  const fields = [
+    { key: 'coeffChute', label: 'Taux de chute', step: '0.01' },
+    { key: 'coeffTransport', label: 'Coeff transport', step: '0.01' },
+    { key: 'coeffMarge', label: 'Marge finale', step: '0.01' },
+    { key: 'prixMoSec', label: 'Prix MO €/sec', step: '0.001' },
+    { key: 'prixPliageM2', label: 'Prix pliage €/m²', step: '0.01' }
+  ];
+
+  elements.coefficientsGrid.innerHTML = fields.map(field => `
     <label>
-      ${label}
-      <input type="number" step="0.01" value="${state.settings[key]}" data-setting-key="${key}" />
+      ${field.label}
+      <input type="number" step="${field.step}" value="${state.params[field.key]}" data-coeff-key="${field.key}" />
     </label>
   `).join('');
 
-  elements.settingsGrid.querySelectorAll('input').forEach(input => {
+  elements.coefficientsGrid.querySelectorAll('input[data-coeff-key]').forEach(input => {
     input.addEventListener('input', event => {
-      const key = event.target.dataset.settingKey;
-      state.settings[key] = parseNumber(event.target.value, DEFAULT_SETTINGS[key]);
+      const key = event.target.dataset.coeffKey;
+      state.params[key] = parseNumber(event.target.value, DEFAULT_DEVIS_PARAMS[key]);
+      saveDevisParams(state.params);
       recalculateRows();
     });
   });
 }
 
 function resetSettings() {
-  state.settings = { ...DEFAULT_SETTINGS };
-  renderSettings();
+  state.params = cloneDefaultParams();
+  saveDevisParams(state.params);
+  renderParametres();
   recalculateRows();
   showToast('Paramètres réinitialisés.');
 }
@@ -469,13 +543,14 @@ function loadLocalProject() {
   }
 
   state.settings = { ...DEFAULT_SETTINGS, ...saved.settings };
+  state.params = mergeParams(saved.params || loadDevisParams());
   state.quoteInfo = { ...state.quoteInfo, ...saved.quoteInfo };
   state.rows = Array.isArray(saved.rows) ? saved.rows : [];
   state.imported = saved.imported || state.imported;
   state.mapping = saved.mapping || state.mapping;
 
   initQuoteInfo();
-  renderSettings();
+  renderParametres();
   renderAll();
   showToast('Projet local rechargé.');
 }
