@@ -89,6 +89,11 @@
             <p>Les colonnes de coût et de marge restent internes. Elles ne seront pas visibles dans le devis client.</p>
           </div>
           <div class="button-row">
+            <input id="tableFilterInput" type="text" placeholder="Filtrer le tableau..." />
+            <label class="row-height-control">Hauteur ligne
+              <input id="rowHeightInput" type="range" min="28" max="80" step="2" value="40" />
+            </label>
+            <button id="clearSortBtn" class="btn secondary">Réinitialiser tri</button>
             <button id="addRowBtn" class="btn secondary">+ Ajouter ligne</button>
             <button id="recalculateBtn" class="btn secondary">Recalculer</button>
             <button id="exportCsvBtn" class="btn secondary">Exporter CSV</button>

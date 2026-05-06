@@ -448,3 +448,40 @@ td input:focus, td select:focus {
   table { page-break-inside: auto; }
   tr { page-break-inside: avoid; page-break-after: auto; }
 }
+
+
+:root {
+  --row-height: 40px;
+}
+
+#tableFilterInput {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.row-height-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #e5e7eb;
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable::after {
+  content: ' ↕';
+  opacity: 0.55;
+  font-weight: 400;
+}
+
+.data-table th.sorted-asc::after { content: ' ↑'; opacity: 1; }
+.data-table th.sorted-desc::after { content: ' ↓'; opacity: 1; }
+
+.data-table td,
+.data-table th {
+  height: var(--row-height);
+}

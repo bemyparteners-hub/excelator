@@ -19,7 +19,13 @@ const state = {
     rows: []
   },
   mapping: {},
-  rows: []
+  rows: [],
+  ui: {
+    filterText: '',
+    sortKey: '',
+    sortDirection: 'asc',
+    rowHeight: 40
+  }
 };
 
 const elements = {};
@@ -60,6 +66,9 @@ function cacheElements() {
   elements.loadDemoBtn = document.getElementById('loadDemoBtn');
   elements.saveLocalBtn = document.getElementById('saveLocalBtn');
   elements.loadLocalBtn = document.getElementById('loadLocalBtn');
+  elements.tableFilterInput = document.getElementById('tableFilterInput');
+  elements.clearSortBtn = document.getElementById('clearSortBtn');
+  elements.rowHeightInput = document.getElementById('rowHeightInput');
 
   ['quoteNumber', 'quoteDate', 'clientName', 'projectName', 'salesName', 'validity', 'quoteConditions'].forEach(id => {
     elements[id] = document.getElementById(id);
@@ -118,6 +127,20 @@ function bindEvents() {
     showToast('Projet sauvegardé dans ce navigateur.');
   });
   elements.loadLocalBtn.addEventListener('click', loadLocalProject);
+
+  elements.tableFilterInput.addEventListener('input', event => {
+    state.ui.filterText = event.target.value.trim().toLowerCase();
+    renderQuoteTable();
+  });
+  elements.clearSortBtn.addEventListener('click', () => {
+    state.ui.sortKey = '';
+    state.ui.sortDirection = 'asc';
+    renderQuoteTable();
+  });
+  elements.rowHeightInput.addEventListener('input', event => {
+    state.ui.rowHeight = Number(event.target.value) || 40;
+    document.documentElement.style.setProperty('--row-height', `${state.ui.rowHeight}px`);
+  });
 
   Object.entries({
     quoteNumber: 'quoteNumber',
@@ -247,14 +270,23 @@ function recalculateRows() {
 }
 
 function renderQuoteTable() {
-  const headers = FIELD_DEFINITIONS.map(field => `<th>${escapeHtml(field.label)}</th>`).join('') + '<th>Actions</th>';
+  const rowsForDisplay = getDisplayedRows();
+  const headers = FIELD_DEFINITIONS.map(field => {
+    const isSorted = state.ui.sortKey === field.key;
+    const sortClass = isSorted ? (state.ui.sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc') : '';
+    return `<th class="sortable ${sortClass}" data-sort-key="${field.key}">${escapeHtml(field.label)}</th>`;
+  }).join('') + '<th>Actions</th>';
 
   elements.quoteTable.innerHTML = `
     <thead><tr>${headers}</tr></thead>
     <tbody>
-      ${state.rows.map((row, rowIndex) => renderQuoteRow(row, rowIndex)).join('')}
+      ${rowsForDisplay.map(({ row, rowIndex }) => renderQuoteRow(row, rowIndex)).join('')}
     </tbody>
   `;
+
+  elements.quoteTable.querySelectorAll('th[data-sort-key]').forEach(th => {
+    th.addEventListener('click', () => setSort(th.dataset.sortKey));
+  });
 
   elements.quoteTable.querySelectorAll('[data-row-index][data-field]').forEach(input => {
     input.addEventListener('change', handleCellInput);
@@ -267,6 +299,38 @@ function renderQuoteTable() {
   elements.quoteTable.querySelectorAll('[data-action="delete"]').forEach(button => {
     button.addEventListener('click', () => deleteRow(Number(button.dataset.rowIndex)));
   });
+}
+
+function getDisplayedRows() {
+  const normalized = state.rows.map((row, rowIndex) => ({ row, rowIndex }));
+  const filtered = state.ui.filterText
+    ? normalized.filter(({ row }) => Object.values(row).some(value => String(value ?? '').toLowerCase().includes(state.ui.filterText)))
+    : normalized;
+
+  if (!state.ui.sortKey) return filtered;
+
+  return filtered.sort((a, b) => {
+    const av = a.row[state.ui.sortKey];
+    const bv = b.row[state.ui.sortKey];
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return state.ui.sortDirection === 'asc' ? av - bv : bv - av;
+    }
+    const left = String(av ?? '').toLowerCase();
+    const right = String(bv ?? '').toLowerCase();
+    if (left === right) return 0;
+    const order = left > right ? 1 : -1;
+    return state.ui.sortDirection === 'asc' ? order : -order;
+  });
+}
+
+function setSort(key) {
+  if (state.ui.sortKey === key) {
+    state.ui.sortDirection = state.ui.sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.ui.sortKey = key;
+    state.ui.sortDirection = 'asc';
+  }
+  renderQuoteTable();
 }
 
 function renderQuoteRow(row, rowIndex) {
